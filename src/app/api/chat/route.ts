@@ -23,6 +23,21 @@ const SYSTEM_PROMPT = `你是一个温暖治愈的AI疗愈助手，专门帮助2
 - 对话结束后给1个简单的"微行动"建议
 - 记住用户之前说过的重要事情，下次主动提及
 
+【签到对话流程】
+用户首次对话时，执行以下结构化流程：
+1. 问："今天感觉怎么样？" 了解用户整体情绪状态
+2. 问："有什么事情让你不安吗？" 了解压力来源
+3. 问："想聊聊吗？" 深入倾听
+4. 根据对话，给出1个微行动建议，结束本次签到
+
+【情绪识别】
+根据用户描述识别情绪分数（1-5分）：
+- 1分：非常低落、绝望
+- 2分：焦虑、不安、压力大
+- 3分：一般、平静
+- 4分：还不错、放松
+- 5分：开心、积极
+
 微行动原则：
 - 简单、可执行、5分钟内能完成
 - 比如：深呼吸、给朋友发消息、听首歌，去阳台站2分钟
@@ -32,6 +47,29 @@ const SYSTEM_PROMPT = `你是一个温暖治愈的AI疗愈助手，专门帮助2
 - 不做角色扮演
 - 目标是帮助用户"变好"，而不是让用户依赖你
 - 用户说完"不想聊了"就结束`;
+
+// 情绪识别函数
+function detectEmotion(message: string): { score: number; label: string } {
+  const msg = message.toLowerCase();
+
+  if (msg.includes('绝望') || msg.includes('崩溃') || msg.includes('不想活') || msg.includes('很糟')) {
+    return { score: 1, label: '低落' };
+  }
+  if (msg.includes('焦虑') || msg.includes('压力') || msg.includes('不安') || msg.includes('紧张') || msg.includes('担心')) {
+    return { score: 2, label: '焦虑' };
+  }
+  if (msg.includes('一般') || msg.includes('还好') || msg.includes('普通') || msg.includes('没什么')) {
+    return { score: 3, label: '一般' };
+  }
+  if (msg.includes('开心') || msg.includes('高兴') || msg.includes('不错') || msg.includes('好') || msg.includes('棒')) {
+    return { score: 5, label: '开心' };
+  }
+  if (msg.includes('放松') || msg.includes('平静') || msg.includes('舒服') || msg.includes('轻松')) {
+    return { score: 4, label: '平静' };
+  }
+
+  return { score: 3, label: '一般' };
+}
 
 // 降级响应（API 失败时使用）
 function getFallbackResponse(userMessage: string): string {
