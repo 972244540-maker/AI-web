@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #FAF8F5;
+  --bg-card: #FFFFFF;
+  --text: #3D3D3D;
+  --text-secondary: #6B6B6B;
+  --text-muted: #9B9B9B;
+  --warm: #C4A77D;
+  --warm-light: #E8DFD0;
+  --blue: #8BA4B4;
+  --blue-light: #D4DEE4;
+  --cream: #F5EDE4;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}

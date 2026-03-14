@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 疗愈助手</title>
+    <style>
+        :root {
+            --bg: #FAF8F5;
+            --bg-card: #FFFFFF;
+            --text: #3D3D3D;
+            --text-secondary: #6B6B6B;
+            --text-muted: #9B9B9B;
+            --warm: #C4A77D;
+            --warm-light: #E8DFD0;
+            --blue: #8BA4B4;
+            --blue-light: #D4DEE4;
+            --cream: #F5EDE4;
+            --shadow: 0 2px 16px rgba(0,0,0,0.04);
+            --radius: 20px;
+            --radius-sm: 12px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            padding: 24px 24px 16px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--warm-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        /* Chat Container */
+        .chat-container {
+            flex: 1;
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 0 20px;
+            overflow-y: auto;
+            padding-bottom: 120px;
+        }
+
+        /* Date */
+        .date-divider {
+            text-align: center;
+            margin: 24px 0;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        /* Messages */
+        .message {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.ai {
+            align-items: flex-start;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .avatar {
+            width: 36px;
+            height: 36px;
+            background: var(--warm-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .message.user .avatar {
+            background: var(--warm);
+        }
+
+        .bubble {
+            max-width: 75%;
+            padding: 16px 20px;
+            border-radius: 20px;
+            font-size: 15px;
+            line-height: 1.7;
+        }
+
+        .message.ai .bubble {
+            background: var(--bg-card);
+            border-bottom-left-radius: 6px;
+            box-shadow: var(--shadow);
+        }
+
+        .message.user .bubble {
+            background: var(--warm);
+            color: white;
+            border-bottom-right-radius: 6px;
+        }
+
+        .bubble p {
+            margin-bottom: 8px;
+        }
+
+        .bubble p:last-child {
+            margin-bottom: 0;
+        }
+
+        .bubble .tip {
+            display: inline-block;
+            background: var(--cream);
+            padding: 10px 16px;
+            border-radius: 12px;
+            margin-top: 12px;
+            font-size: 14px;
+        }
+
+        .bubble .tip-icon {
+            margin-right: 6px;
+        }
+
+        /* Micro Action Card */
+        .micro-action {
+            background: var(--bg-card);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin: 16px 0 20px 48px;
+            box-shadow: var(--shadow);
+            border-left: 3px solid var(--blue);
+        }
+
+        .micro-action-label {
+            font-size: 11px;
+            color: var(--blue);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .micro-action-text {
+            font-size: 15px;
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .micro-action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--warm);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #B39568;
+        }
+
+        .btn-secondary {
+            background: var(--cream);
+            color: var(--text-secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--warm-light);
+        }
+
+        /* Input Area */
+        .input-area {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--bg);
+            padding: 16px 20px 32px;
+            border-top: 1px solid rgba(0,0,0,0.04);
+        }
+
+        .input-wrapper {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .input-field {
+            flex: 1;
+            background: var(--bg-card);
+            border: none;
+            border-radius: 24px;
+            padding: 16px 20px;
+            font-size: 15px;
+            font-family: inherit;
+            resize: none;
+            max-height: 120px;
+            outline: none;
+            box-shadow: var(--shadow);
+        }
+
+        .input-field::placeholder {
+            color: var(--text-muted);
+        }
+
+        .send-btn {
+            width: 48px;
+            height: 48px;
+            background: var(--warm);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .send-btn:hover {
+            background: #B39568;
+            transform: scale(1.05);
+        }
+
+        .send-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <div class="logo-icon">🌿</div>
+            <span>AI 疗愈助手</span>
+        </div>
+    </header>
+
+    <div class="chat-container" id="chat">
+        <div class="date-divider">今天 10:30</div>
+
+        <!-- AI Message 1 -->
+        <div class="message ai">
+            <div class="avatar">🌿</div>
+            <div class="bubble">
+                <p>嗨，欢迎回来。</p>
+                <p>今天过得怎么样？有什么想聊聊的吗？</p>
+            </div>
+        </div>
+
+        <!-- User Message 1 -->
+        <div class="message user">
+            <div class="avatar">👤</div>
+            <div class="bubble">
+                <p>今天答辩有点紧张，睡不着</p>
+            </div>
+        </div>
+
+        <!-- AI Message 2 -->
+        <div class="message ai">
+            <div class="avatar">🌿</div>
+            <div class="bubble">
+                <p>答辩前一天紧张是很正常的，你现在已经躺下了吗？</p>
+                <p>还是在准备答辩的内容？</p>
+            </div>
+        </div>
+
+        <!-- User Message 2 -->
+        <div class="message user">
+            <div class="avatar">👤</div>
+            <div class="bubble">
+                <p>躺下了，但脑子里一直在想明天的事情</p>
+            </div>
+        </div>
+
+        <!-- AI Message 3 - Micro Action -->
+        <div class="message ai">
+            <div class="avatar">🌿</div>
+            <div class="bubble">
+                <p>听起来你准备得很充分，只是有点担心结果的焦虑。</p>
+                <div class="tip">
+                    <span class="tip-icon">💡</span>
+                    一个小建议：去阳台做 3 次深呼吸，吸气 4 秒，呼气 6 秒。
+                </div>
+            </div>
+        </div>
+
+        <!-- Micro Action Card -->
+        <div class="micro-action">
+            <div class="micro-action-label">今日微行动</div>
+            <div class="micro-action-text">
+                去阳台做 3 次深呼吸，吸气 4 秒，呼气 6 秒
+            </div>
+            <div class="micro-action-buttons">
+                <button class="btn btn-primary">去做了</button>
+                <button class="btn btn-secondary">等会儿</button>
+                <button class="btn btn-secondary">先跳过</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-wrapper">
+            <textarea class="input-field" placeholder="今天感觉怎么样？" rows="1"></textarea>
+            <button class="send-btn">
+                <svg viewBox="0 0 24 24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Simple interaction demo
+        const input = document.querySelector('.input-field');
+        const sendBtn = document.querySelector('.send-btn');
+        const chat = document.getElementById('chat');
+
+        input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        sendBtn.addEventListener('click', () => {
+            const text = input.value.trim();
+            if (!text) return;
+
+            // Add user message
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.innerHTML = `
+                <div class="avatar">👤</div>
+                <div class="bubble"><p>${text}</p></div>
+            `;
+            chat.appendChild(userMsg);
+            input.value = '';
+            input.style.height = 'auto';
+
+            // Scroll to bottom
+            chat.scrollTop = chat.scrollHeight;
+
+            // Simulate AI response after 1s
+            setTimeout(() => {
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'message ai';
+                aiMsg.innerHTML = `
+                    <div class="avatar">🌿</div>
+                    <div class="bubble"><p>谢谢你告诉我这些。</p></div>
+                `;
+                chat.appendChild(aiMsg);
+                chat.scrollTop = chat.scrollHeight;
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
