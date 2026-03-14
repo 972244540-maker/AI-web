@@ -42,7 +42,8 @@ export async function getMemories(deviceId: string) {
   // 本地存储降级
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(STORAGE_KEYS.memories);
-  return stored ? JSON.parse(stored) : [];
+  const allMemories = stored ? JSON.parse(stored) : [];
+  return allMemories.filter((m: any) => m.device_id === deviceId).slice(0, 10);
 }
 
 // 保存记忆
@@ -85,8 +86,9 @@ export async function getConversations(deviceId: string, limit = 20) {
   // 本地存储降级
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(STORAGE_KEYS.conversations);
-  const conversations = stored ? JSON.parse(stored) : [];
-  return conversations.slice(-limit).reverse();
+  const allConversations = stored ? JSON.parse(stored) : [];
+  const filtered = allConversations.filter((c: any) => c.device_id === deviceId);
+  return filtered.slice(-limit).reverse();
 }
 
 // 保存对话

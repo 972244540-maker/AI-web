@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getDeviceId, getMemories, getConversations, saveMemory, saveConversation } from '@/lib/supabase';
-import { getEmotionRecords, EMOTION_LABELS, EmotionRecord } from '@/lib/emotions';
+import { getEmotionRecords, getTodayEmotion, EMOTION_LABELS, EmotionRecord } from '@/lib/emotions';
 
 interface Message {
   id: string;
@@ -128,29 +128,40 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [memories, setMemories] = useState<any[]>([]);
   const [emotionRecords, setEmotionRecords] = useState<EmotionRecord[]>([]);
+  const [todayEmotion, setTodayEmotion] = useState<EmotionRecord | null>(null);
   const [activeTab, setActiveTab] = useState<'chat' | 'curve' | 'records'>('chat'); // 标签页状态
   const [showMicroAction, setShowMicroAction] = useState(true); // 模拟：显示微行动卡片
   const [microActionDone, setMicroActionDone] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
-  const deviceId = useRef('');
+  const deviceIdRef = useRef('');
 
   // 初始化 - 加载真实数据
   useEffect(() => {
-    deviceId.current = getDeviceId();
-    loadHistory();
+    deviceIdRef.current = getDeviceId();
+    setIsReady(true);
   }, []);
+
+  // 加载历史数据
+  useEffect(() => {
+    if (isReady) {
+      loadHistory();
+    }
+  }, [isReady]);
 
   // 恢复真实API调用
   // 加载历史
   async function loadHistory() {
-    const [conversationHistory, userMemories, emotions] = await Promise.all([
-      getConversations(deviceId.current),
-      getMemories(deviceId.current),
-      getEmotionRecords(deviceId.current),
+    const [conversationHistory, userMemories, emotions, today] = await Promise.all([
+      getConversations(deviceIdRef.current),
+      getMemories(deviceIdRef.current),
+      getEmotionRecords(deviceIdRef.current),
+      getTodayEmotion(deviceIdRef.current),
     ]);
 
     setMemories(userMemories);
     setEmotionRecords(emotions);
+    setTodayEmotion(today);
 
     if (conversationHistory.length > 0) {
       setMessages(conversationHistory);
@@ -180,7 +191,7 @@ export default function Home() {
     }]);
 
     // 保存用户消息到本地
-    saveConversation(deviceId.current, 'user', userMessage);
+    saveConversation(deviceIdRef.current, 'user', userMessage);
 
     try {
       const response = await fetch('/api/chat', {
@@ -188,7 +199,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage,
-          deviceId: deviceId.current,
+          deviceId: deviceIdRef.current,
           memories,
         }),
       });
@@ -202,7 +213,7 @@ export default function Home() {
           content: data.message,
         }]);
         // 保存AI回复到本地
-        saveConversation(deviceId.current, 'assistant', data.message);
+        saveConversation(deviceIdRef.current, 'assistant', data.message);
       } else if (data.error) {
         setMessages(prev => [...prev, {
           id: (Date.now() + 1).toString(),
@@ -212,6 +223,11 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error:', error);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '发送失败，请检查网络后重试',
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -221,9 +237,14 @@ export default function Home() {
   async function handleSaveMemory() {
     const content = prompt('记录一件重要的事情（AI会记住）：');
     if (content) {
-      await saveMemory(deviceId.current, content);
-      const newMemories = await getMemories(deviceId.current);
-      setMemories(newMemories);
+      try {
+        await saveMemory(deviceIdRef.current, content);
+        const newMemories = await getMemories(deviceIdRef.current);
+        setMemories(newMemories);
+      } catch (err) {
+        console.error('Error saving memory:', err);
+        alert('保存失败，请重试');
+      }
     }
   }
 
@@ -242,32 +263,42 @@ export default function Home() {
         <div className="flex items-center justify-center gap-2 mb-3">
           <span className="text-xl">🌿</span>
           <span className="font-semibold text-[#3D3D3D]">AI 疗愈助手</span>
+          {/* 今日情绪状态 */}
+          {todayEmotion && (
+            <button
+              onClick={() => setActiveTab('curve')}
+              className="ml-2 text-sm px-2 py-1 rounded-full bg-white shadow-sm hover:shadow transition-shadow"
+              style={{ color: getEmotionColor(todayEmotion.score) }}
+            >
+              {todayEmotion.score === 1 ? '😢' : todayEmotion.score === 2 ? '😰' : todayEmotion.score === 3 ? '😐' : todayEmotion.score === 4 ? '😊' : '😄'}
+            </button>
+          )}
         </div>
         {/* 标签导航 */}
         <div className="flex justify-center gap-1 bg-white rounded-full p-1 shadow-sm max-w-xs mx-auto">
           <button
             onClick={() => setActiveTab('chat')}
-            className={`flex-1 py-1.5 px-4 rounded-full text-sm font-medium transition-all ${
+            className={`flex-1 py-1.5 px-3 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-1 ${
               activeTab === 'chat' ? 'bg-[#C4A77D] text-white' : 'text-[#6B6358] hover:bg-gray-50'
             }`}
           >
-            聊天
+            💬 聊天
           </button>
           <button
             onClick={() => setActiveTab('curve')}
-            className={`flex-1 py-1.5 px-4 rounded-full text-sm font-medium transition-all ${
+            className={`flex-1 py-1.5 px-3 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-1 ${
               activeTab === 'curve' ? 'bg-[#C4A77D] text-white' : 'text-[#6B6358] hover:bg-gray-50'
             }`}
           >
-            情绪曲线
+            📈 曲线
           </button>
           <button
             onClick={() => setActiveTab('records')}
-            className={`flex-1 py-1.5 px-4 rounded-full text-sm font-medium transition-all ${
+            className={`flex-1 py-1.5 px-3 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-1 ${
               activeTab === 'records' ? 'bg-[#C4A77D] text-white' : 'text-[#6B6358] hover:bg-gray-50'
             }`}
           >
-            记录
+            📝 记录
           </button>
         </div>
       </header>
@@ -325,7 +356,7 @@ export default function Home() {
             )}
 
             {/* 微行动卡片 */}
-            {showMicroAction && messages.length > 0 && (
+            {showMicroAction && messages.length > 0 && !microActionDone && (
               <div className="mb-6 animate-fadeIn">
                 <div className="bg-gradient-to-r from-[#E8DFD0] to-[#F5F0E8] rounded-2xl p-5 shadow-sm border border-[#D4C4B0]/30">
                   <div className="flex items-center gap-2 mb-3">
@@ -337,8 +368,11 @@ export default function Home() {
                   </p>
                   <div className="flex gap-3">
                     <button
-                      onClick={() => setMicroActionDone(true)}
-                      className="flex-1 bg-[#C4A77D] text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-[#B39568] transition-colors"
+                      onClick={() => {
+                        setMicroActionDone(true);
+                        alert('太棒了！🌟 你迈出了自我关爱的一大步！记得照顾好自己哦～');
+                      }}
+                      className="flex-1 bg-[#C4A77D] text-white py-2.5 px-4 rounded-full text-sm font-medium hover:bg-[#B39568] transition-colors active:scale-95"
                     >
                       做了，感觉好多了
                     </button>
@@ -405,19 +439,23 @@ export default function Home() {
                   <button
                     key={e.score}
                     onClick={async () => {
-                      await fetch('/api/emotion', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          deviceId: deviceId.current,
-                          score: e.score,
-                          label: e.label,
-                        }),
-                      });
-                      const records = await getEmotionRecords(deviceId.current);
-                      setEmotionRecords(records);
+                      try {
+                        await fetch('/api/emotion', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            deviceId: deviceIdRef.current,
+                            score: e.score,
+                            label: e.label,
+                          }),
+                        });
+                        const records = await getEmotionRecords(deviceIdRef.current);
+                        setEmotionRecords(records);
+                      } catch (err) {
+                        console.error('Error:', err);
+                      }
                     }}
-                    className="flex-1 py-3 px-1 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                    className="flex-1 py-3 px-1 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors active:bg-gray-200"
                   >
                     <div className="text-xl">{e.emoji}</div>
                     <div className="text-[10px] text-gray-500 mt-1">{e.label}</div>
@@ -515,19 +553,23 @@ export default function Home() {
                   <button
                     key={e.score}
                     onClick={async () => {
-                      await fetch('/api/emotion', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          deviceId: deviceId.current,
-                          score: e.score,
-                          label: e.label,
-                        }),
-                      });
-                      const records = await getEmotionRecords(deviceId.current);
-                      setEmotionRecords(records);
+                      try {
+                        await fetch('/api/emotion', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            deviceId: deviceIdRef.current,
+                            score: e.score,
+                            label: e.label,
+                          }),
+                        });
+                        const records = await getEmotionRecords(deviceIdRef.current);
+                        setEmotionRecords(records);
+                      } catch (err) {
+                        console.error('Error:', err);
+                      }
                     }}
-                    className="flex-1 py-2 px-1 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                    className="flex-1 py-2 px-1 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors active:bg-gray-200"
                   >
                     <div className="text-lg">{e.emoji}</div>
                   </button>
@@ -541,10 +583,51 @@ export default function Home() {
       {/* Input Area - Only show on chat tab */}
       {activeTab === 'chat' && (
         <div className="fixed bottom-0 left-0 right-0 bg-[#FAF8F5] border-t border-black/5 px-5 py-4">
+          {/* 快速情绪记录 */}
+          <div className="max-w-2xl mx-auto mb-3 flex justify-center gap-2">
+            {[
+              { score: 1, emoji: '😢' },
+              { score: 2, emoji: '😰' },
+              { score: 3, emoji: '😐' },
+              { score: 4, emoji: '😊' },
+              { score: 5, emoji: '😄' },
+            ].map((e) => (
+              <button
+                key={e.score}
+                onClick={async () => {
+                  try {
+                    const labels = ['', '低落', '焦虑', '一般', '平静', '开心'];
+                    await fetch('/api/emotion', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        deviceId: deviceIdRef.current,
+                        score: e.score,
+                        label: labels[e.score],
+                      }),
+                    });
+                    const [records, today] = await Promise.all([
+                      getEmotionRecords(deviceIdRef.current),
+                      getTodayEmotion(deviceIdRef.current),
+                    ]);
+                    setEmotionRecords(records);
+                    setTodayEmotion(today);
+                  } catch (err) {
+                    console.error('Error recording emotion:', err);
+                    alert('记录失败，请重试');
+                  }
+                }}
+                className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-lg hover:scale-110 transition-transform active:scale-90"
+                title={`记录${['', '低落', '焦虑', '一般', '平静', '开心'][e.score]}`}
+              >
+                {e.emoji}
+              </button>
+            ))}
+          </div>
           <div className="max-w-2xl mx-auto flex gap-3 items-end">
             <button
               onClick={handleSaveMemory}
-              className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-lg hover:bg-[#E8DFD0] transition-colors"
+              className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-lg hover:bg-[#E8DFD0] transition-colors active:scale-95"
               title="记录重要事情"
             >
               💾
@@ -561,7 +644,7 @@ export default function Home() {
             <button
               onClick={sendMessage}
               disabled={!input.trim() || isLoading}
-              className="w-12 h-12 rounded-full bg-[#C4A77D] text-white flex items-center justify-center hover:bg-[#B39568] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-12 h-12 rounded-full bg-[#C4A77D] text-white flex items-center justify-center hover:bg-[#B39568] transition-colors disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <svg viewBox="0 0 24 24" className="w-5 h-5">
                 <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />

@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { execSync } from 'child_process';
 
 // 环境变量
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const miniMaxApiKey = process.env.MINIMAX_API_KEY || '';
 const miniMaxBaseUrl = process.env.MINIMAX_BASE_URL || 'https://api.minimax.chat/v1';
-const proxyUrl = process.env.HTTP_PROXY || ''; // 可选：添加代理如 http://127.0.0.1:7890
+const proxyUrl = process.env.HTTP_PROXY || '';
 
 // 仅在配置有效时创建客户端
 const supabase: SupabaseClient | null = supabaseUrl && supabaseKey
@@ -48,29 +49,6 @@ const SYSTEM_PROMPT = `你是一个温暖治愈的AI疗愈助手，专门帮助2
 - 目标是帮助用户"变好"，而不是让用户依赖你
 - 用户说完"不想聊了"就结束`;
 
-// 情绪识别函数
-function detectEmotion(message: string): { score: number; label: string } {
-  const msg = message.toLowerCase();
-
-  if (msg.includes('绝望') || msg.includes('崩溃') || msg.includes('不想活') || msg.includes('很糟')) {
-    return { score: 1, label: '低落' };
-  }
-  if (msg.includes('焦虑') || msg.includes('压力') || msg.includes('不安') || msg.includes('紧张') || msg.includes('担心')) {
-    return { score: 2, label: '焦虑' };
-  }
-  if (msg.includes('一般') || msg.includes('还好') || msg.includes('普通') || msg.includes('没什么')) {
-    return { score: 3, label: '一般' };
-  }
-  if (msg.includes('开心') || msg.includes('高兴') || msg.includes('不错') || msg.includes('好') || msg.includes('棒')) {
-    return { score: 5, label: '开心' };
-  }
-  if (msg.includes('放松') || msg.includes('平静') || msg.includes('舒服') || msg.includes('轻松')) {
-    return { score: 4, label: '平静' };
-  }
-
-  return { score: 3, label: '一般' };
-}
-
 // 降级响应（API 失败时使用）
 function getFallbackResponse(userMessage: string): string {
   const msg = userMessage.toLowerCase();
@@ -84,10 +62,50 @@ function getFallbackResponse(userMessage: string): string {
   }
 
   if (msg.includes('开心') || msg.includes('高兴') || msg.includes('好')) {
-    '听到你今天状态不错，真为你开心！有什么好事想分享吗？';
+    return '听到你今天状态不错，真为你开心！有什么好事想分享吗？';
   }
 
   return '我在这里陪着你。今天过得怎么样？有什么想聊聊的吗？';
+}
+
+// 调用 MiniMax API
+async function callMiniMaxApi(message: string, context: string): Promise<string> {
+  const apiUrl = `${miniMaxBaseUrl}/text/chatcompletion_v2`;
+
+  const payload = JSON.stringify({
+    model: 'abab6.5s-chat',
+    messages: [
+      { role: 'system', content: context },
+      { role: 'user', content: message }
+    ],
+    temperature: 0.7,
+    max_tokens: 500,
+  });
+
+  // 使用 curl 调用 API（curl 会自动使用系统代理）
+  const proxyFlag = proxyUrl ? `--proxy ${proxyUrl}` : '';
+  const curlCmd = `curl -s ${proxyFlag} -X POST "${apiUrl}" \\
+    -H "Content-Type: application/json" \\
+    -H "Authorization: Bearer ${miniMaxApiKey}" \\
+    -d '${payload}'`;
+
+  try {
+    const result = execSync(curlCmd, { encoding: 'utf8', timeout: 30000 });
+    const data = JSON.parse(result);
+
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      return data.choices[0].message.content;
+    }
+
+    if (data.base_resp && data.base_resp.status_msg) {
+      console.error('API Error:', data.base_resp.status_msg);
+    }
+
+    return '';
+  } catch (error: any) {
+    console.error('API Call Error:', error.message);
+    return '';
+  }
 }
 
 export async function POST(request: Request) {
@@ -112,49 +130,12 @@ export async function POST(request: Request) {
       });
     }
 
-    let aiMessage = '';
-
     // 调用 MiniMax API
-    try {
-      const fetchOptions: RequestInit = {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${miniMaxApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'M2.1',
-          messages: [
-            { role: 'system', content: context },
-            { role: 'user', content: message }
-          ],
-          temperature: 0.7,
-          max_tokens: 500,
-        }),
-      };
-
-      // 如果配置了代理，使用代理
-      if (proxyUrl) {
-        // @ts-ignore - Node.js 环境
-        fetchOptions.agent = new (await import('http')).proxy-agent(proxyUrl);
-      }
-
-      const response = await fetch(`${miniMaxBaseUrl}/text/chatcompletion_v2`, fetchOptions);
-
-      if (!response.ok) {
-        throw new Error('API response not ok');
-      }
-
-      const data = await response.json();
-      aiMessage = data.choices?.[0]?.message?.content || '';
-    } catch (apiError) {
-      console.error('MiniMax API Error:', apiError);
-      // API 失败时使用降级响应
-      aiMessage = getFallbackResponse(message);
-    }
+    let aiMessage = await callMiniMaxApi(message, context);
 
     if (!aiMessage) {
-      aiMessage = '抱歉，我现在有点累了，我们下次再聊吧。';
+      // API 失败时使用降级响应
+      aiMessage = getFallbackResponse(message);
     }
 
     // 保存对话到 Supabase（可选）
